@@ -1,0 +1,347 @@
+import os
+import json
+import urllib.request
+import sys
+
+
+from datetime import date
+
+###custom imports (file unreadable as single file, so i did split)
+import agent_definitions
+import agent_tools
+
+
+
+class modelMessage:
+    def __init__(self,role,content = None,reasoning = None, toolCalls = None, toolResults = None):
+        self.role = role
+        self.content = content
+        self.reasoning = reasoning
+        self.toolCalls = toolCalls #that will be a list all the time. Thats for role "assistant"
+        self.toolResults = toolResults #i assume its a list too. Thats for role "tool"
+    
+    def composeSelf(self,want_reasoning = True):
+        result = {}
+        if self.content == None and self.reasoning == None and self.tool == None:
+            return
+
+        result.update({
+            "role": self.role
+        })
+
+        if self.content != None:
+            result.update(
+                {
+                    "content": self.content
+                }
+            )
+
+        if self.reasoning != None or self.reasoning == '' and want_reasoning == True:
+            result.update(
+                {
+                    "reasoning_content": self.reasoning
+                }
+            )
+
+        if self.toolCalls != None:
+            toolCallsData = []
+            for i in self.toolCalls:
+                toolCallsData.append(i.composeSelf())
+            result.update(
+                {
+                    "tool_calls": toolCallsData
+                }
+            )
+ 
+        return result
+
+class modelTextContext:
+    def __init__(self):
+        self.messages = []
+        return
+
+    def add_message(self,message):
+        self.messages.append(message)
+
+    def composeSelf(self,want_reasoning = True):
+        messages = []
+        for i in self.messages:
+            messages.append(i.composeSelf(want_reasoning))
+        return messages
+
+class modelRequest:
+    def __init__(self,context,model):
+        self.context = context
+        self.model = model
+
+    def composeSelf(self,want_reasoning):
+        messages = self.context.composeSelf(want_reasoning)
+        result = {
+            "model": self.model,
+            "messages": messages,
+            "tools": agent_definitions.SYS_TOOLS,
+            "tool_choice": "auto",
+            "stream": True
+        }
+        return result
+
+    def makeRequest(self, want_reasoning = True):
+        result = urllib.request.Request(
+            agent_definitions.url,
+            data=json.dumps(self.composeSelf(want_reasoning)).encode(),
+            headers={
+                "Authorization": f"Bearer {'local'}",
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream"
+            },
+            method="POST"
+        )
+
+        return result
+
+class modelAnswer():
+    def __init__(self):
+        self.content = ""
+        self.reasoning = ""
+        self.stopped = False
+        self.debug_result = []
+        self.last_item = ""
+        self.currently = "reasoning"
+        self.prev = "reasoning"
+        self.toolCalls = []
+
+
+
+    def processStreamLine(self,data):
+        line = data.decode("utf-8").strip()
+        if line[:6] != "data: ":
+            #what was called before???
+            if(self.currently != "nothing"):
+                self.prev = self.currently
+            self.currently = "nothing"
+            return
+
+        ###debug result
+        self.debug_result.append(line)
+        ###debug end
+        
+        update = line[6:]
+        if update == '[DONE]':
+            self.stopped = True
+            return
+
+        #print(update)
+
+        update_j = json.loads(update)
+
+        for item in update_j.get("choices",[]):
+            delta = item.get("delta",{})
+            reasoning = delta.get("reasoning_content")
+            content = delta.get("content")
+            tool_calls = delta.get("tool_calls")
+            finish_reason = item.get("finish_reason")
+
+
+            if content != None:
+                self.content+=content
+                self.currently = "answer"
+                self.last_item = content
+
+            if reasoning != None:
+                self.reasoning+=reasoning
+                self.currently = "reasoning"
+                self.last_item = reasoning
+
+            if tool_calls != None:
+                self.process_tool(tool_calls)
+
+            if finish_reason == "tool_calls":
+                self.process_tool(None,True)
+                self.stopped = True
+                self.calledTool = True
+
+    def process_tool(self,tool_call = None, end = False):
+        #tool call ended, so we need to go further
+        if end == True:
+            self.finalize_tool()
+            return
+
+
+        #tell the user its now a tool call
+        if(self.prev != "tool"):
+            self.last_item = "tool calling"
+            self.currently = "tool"
+            self.toolChunks = []
+        else:
+            self.last_item = "."
+
+        #lets try to get someting out of the call
+        self.toolChunks.append(tool_call) 
+
+    def finalize_tool(self):
+        processor = agent_tools.agentToolsChunkParser()
+
+        self.toolCalls = processor.processChunks(self.toolChunks)
+    
+    def isDone(self):
+        return self.stopped
+
+    def getMessage(self):
+        return modelMessage("assistant",self.content,self.reasoning,self.toolCalls)
+
+
+class cliPrinter:
+    def __init__(self):
+        self.use_color = (
+            sys.stdout.isatty()
+            and "NO_COLOR" not in os.environ
+            and os.environ.get("TERM") != "dumb"
+        )
+
+        self.thinkColor = "\033[90m" #kinda gray
+        self.answerColor = "\033[36m" #cyan
+        self.userColor = "\033[32m" #green
+        self.systemColor = "\033[33m" #yellow
+        self.toolColor = "\033[91m" #bright red
+
+        self.resetColor = "\033[0m" #reset to as it was
+        
+    
+    def printChunk(self,content,type):
+        color = ""
+        result = content
+        match type:
+            case "reasoning":
+                color = self.thinkColor
+            case "answer":
+                color = self.answerColor
+            case "tool":
+                color = self.toolColor
+            case _:
+                return
+
+        self.printColorized(color,result)
+
+    def printColorized(self,color,content):
+        if self.use_color == True:
+            print(f"{color}{content}{self.resetColor}", end = "", flush = True)
+        else:
+            print(f"{content}", end = "", flush = True)
+        return
+
+    def doInput(self,prompt):
+        user_prompt = ""
+        if self.use_color == False:
+            user_prompt = prompt
+        else:
+            user_prompt = f"{self.userColor}{prompt}"
+
+        try:
+            return input(user_prompt)
+        finally:
+            if self.use_color == True:
+                sys.stdout.write(self.resetColor)
+            sys.stdout.flush()
+
+    def printEndMessage(self):
+        print("\n\n")
+
+    def printSysMessage(self, message):
+        cur_message = message
+        if self.use_color == True:
+            cur_message = f"{self.systemColor}{message}"
+        print(cur_message)
+        print("\n")
+
+    def resetScreen(self):
+        if sys.stdout.isatty():
+            print("\033[2J\033[H", flush=True) #seems to be easier
+        #if sys.platform == "win32":
+        #    os.system("cls")
+        #else:
+        #    os.system("clear")
+
+
+##################### execution here
+
+### lets define model call function that will just take context and do all the job
+
+def call_model(context, printer):
+    # define object to process model's answer
+    c_answer = modelAnswer()
+    response = None
+
+    try:
+        #make http request
+        m_request = modelRequest(context, agent_definitions.MODEL)
+        req = m_request.makeRequest()
+
+        #do actual call
+        response = urllib.request.urlopen(req, timeout=15)
+        for raw_line in response:
+            c_answer.processStreamLine(raw_line)
+
+            if c_answer.isDone():
+                break
+
+            printer.printChunk(c_answer.last_item,c_answer.currently)
+        
+        #done with listening to answer. Lets return final model's message
+
+        return c_answer
+    except KeyboardInterrupt:
+        printer.printEndMessage()
+        printer.printSysMessage("Interrupted by user")
+        return None
+
+    finally:
+        if response is not None:
+            response.close()
+    
+
+
+
+session_context = modelTextContext()
+systemMessage = modelMessage("system",agent_definitions.SYS_MESSAGE)
+session_context.add_message(systemMessage)
+
+screen_printer = cliPrinter()
+
+#now the loop for user
+
+while(1):
+    #let the user do input
+    user_input = screen_printer.doInput("")
+
+    match user_input:
+        case "/context":
+            to_save = json.dumps(session_context.composeSelf(True), indent=2)
+
+            f = open("session.txt","w",encoding="utf-8")
+            f.write(to_save)
+            f.close()
+
+        case "/exit":
+            break
+
+        case "/clear":
+            session_context = modelTextContext()
+            systemMessage = modelMessage("system",agent_definitions.SYS_MESSAGE)
+            session_context.add_message(systemMessage)
+            screen_printer.resetScreen()
+            screen_printer.printSysMessage("Session reset")
+        
+        case _:
+            userMessage = modelMessage("user",user_input)
+            session_context.add_message(userMessage)
+            screen_printer.printEndMessage()
+
+            answer = call_model(session_context,screen_printer)
+            if answer is None:
+                continue
+            screen_printer.printEndMessage()
+            
+
+            #add all text gathered, and tool calls are added to message as well, so its not lost
+            session_context.add_message(answer.getMessage())
+
