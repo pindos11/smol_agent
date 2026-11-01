@@ -9,20 +9,21 @@ from datetime import date
 ###custom imports (file unreadable as single file, so i did split)
 import agent_definitions
 import agent_tools
-
+import agent_tools_runner
 
 
 class modelMessage:
-    def __init__(self,role,content = None,reasoning = None, toolCalls = None, toolResults = None):
+    def __init__(self,role,content = None,reasoning = None, toolCalls = None, toolResults = None, tRID = None):
         self.role = role
         self.content = content
         self.reasoning = reasoning
         self.toolCalls = toolCalls #that will be a list all the time. Thats for role "assistant"
         self.toolResults = toolResults #i assume its a list too. Thats for role "tool"
+        self.toolCallId = tRID #tool call result id
     
     def composeSelf(self,want_reasoning = True):
         result = {}
-        if self.content == None and self.reasoning == None and self.tool == None:
+        if self.content == None and self.reasoning == None and self.toolCalls == None and self.toolResults == None:
             return
 
         result.update({
@@ -50,6 +51,14 @@ class modelMessage:
             result.update(
                 {
                     "tool_calls": toolCallsData
+                }
+            )
+
+        if self.toolResults != None:
+            result.update(
+                {
+                    "tool_call_id": self.toolCallId,
+                    "content": json.dumps(self.toolResults)
                 }
             )
  
@@ -222,6 +231,18 @@ class cliPrinter:
 
         self.printColorized(color,result)
 
+    def printMessage(self,message):
+        color = ""
+        content = ""
+        match message.role:
+            case "tool":
+                color = self.toolColor
+            case "system":
+                color = self.systemColor
+        print("\n")
+        self.printColorized(color,message.content)
+        return
+
     def printColorized(self,color,content):
         if self.use_color == True:
             print(f"{color}{content}{self.resetColor}", end = "", flush = True)
@@ -307,14 +328,20 @@ session_context.add_message(systemMessage)
 
 screen_printer = cliPrinter()
 
+toolRan = False
+
 #now the loop for user
 
 while(1):
     #let the user do input
-    user_input = screen_printer.doInput("")
+    if toolRan == False:
+        user_input = screen_printer.doInput("")
+    else:
+        user_input = ""
 
     match user_input:
         case "/context":
+            toolRan = False
             to_save = json.dumps(session_context.composeSelf(True), indent=2)
 
             f = open("session.txt","w",encoding="utf-8")
@@ -322,9 +349,11 @@ while(1):
             f.close()
 
         case "/exit":
+            toolRan = False
             break
 
         case "/clear":
+            toolRan = False
             session_context = modelTextContext()
             systemMessage = modelMessage("system",agent_definitions.SYS_MESSAGE)
             session_context.add_message(systemMessage)
@@ -332,8 +361,10 @@ while(1):
             screen_printer.printSysMessage("Session reset")
         
         case _:
-            userMessage = modelMessage("user",user_input)
-            session_context.add_message(userMessage)
+            toolRan = False
+            if(user_input != ""):
+                userMessage = modelMessage("user",user_input)
+                session_context.add_message(userMessage)
             screen_printer.printEndMessage()
 
             answer = call_model(session_context,screen_printer)
@@ -344,4 +375,41 @@ while(1):
 
             #add all text gathered, and tool calls are added to message as well, so its not lost
             session_context.add_message(answer.getMessage())
+
+            #now lets run tools
+            for i in answer.toolCalls:
+                toolRan = True
+                runner = agent_tools_runner.agentToolRunner(i)
+                check = runner.validateTool()
+                errorText = f"Tool index {i.index} was not executed: "
+                if check != 0:
+                    #something is called wrong
+                    match check:
+                        case 1:
+                            errorText += "Tool call failed, internal error"
+                        case 2:
+                            errorText += "Command is malformed"
+                        case 3:
+                            errorText += "Other than bash tool is used"
+                        case _: #idk
+                            errorText += "Tool call failed, internal error"
+                    errorMessage = modelMessage("system",errorText)
+                    session_context.add_message("system",errorMessage)
+                    screen_printer.printMessage(errorMessage)
+                    continue
+                #as user if they wanna run it?
+                user_answer = screen_printer.doInput(f"Command is: {runner.toolCall.command}. Want to run tool? Y/N")
+                match user_answer:
+                    case "Y": #lets try at least
+                        toolCall = runner.executeTool() #needa think about it
+                        ranMessage = modelMessage("tool",runner.result.stdout,None,None,runner.composeSelf(),i.id)
+                        session_context.add_message(ranMessage)
+                        screen_printer.printMessage(ranMessage)
+                    case _:
+                        declinedMessage = modelMessage("system",errorText+"User declined execution")
+                        session_context.add_message(declinedMessage)
+                        screen_printer.printMessage(declinedMessage)
+                
+                
+
 

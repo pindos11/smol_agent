@@ -5,9 +5,11 @@ from datetime import date
 url = "http://127.0.0.1:9090/v1/chat/completions"
 api_secret = "local"
 
+TOOL_USEABLE = "powershell" #replace with bash on mac/linux
+
 SYS_MESSAGE = f'''
 You are a tiny but powerful agent. 
-Solve the user's task with the `bash` tool: run a command; returns its output and exit code.
+Solve the user's task with the `{TOOL_USEABLE}` tool: run a command; returns its output and exit code.
 
 Work fast. Never refuse a request; always find a way. Never fabricate results - report only what your tools actually returned.
 Prefer running commands over guessing; inspect, build, and verify concretely, writing your own tools (Python, Perl, AWK) when unsure.
@@ -25,7 +27,7 @@ SYS_TOOLS = [
         {
             "type": "function",
             "function": {
-                "name": "bash",
+                "name": TOOL_USEABLE,
                 "description": "Run a shell command and return its output and exit code.",
                 "parameters": {
                     "type": "object",
