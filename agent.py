@@ -90,7 +90,7 @@ class modelRequest:
             agent_definitions.url,
             data=json.dumps(self.composeSelf(want_reasoning)).encode(),
             headers={
-                "Authorization": f"Bearer {'local'}",
+                "Authorization": f"Bearer {agent_definitions.api_secret}",
                 "Content-Type": "application/json",
                 "Accept": "text/event-stream"
             },

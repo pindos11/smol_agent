@@ -3,6 +3,7 @@ import sys
 from datetime import date
 
 url = "http://127.0.0.1:9090/v1/chat/completions"
+api_secret = "local"
 
 SYS_MESSAGE = f'''
 You are a tiny but powerful agent. 
