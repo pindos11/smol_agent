@@ -10,73 +10,7 @@ from datetime import date
 import agent_definitions
 import agent_tools
 import agent_tools_runner
-
-
-class modelMessage:
-    def __init__(self,role,content = None,reasoning = None, toolCalls = None, toolResults = None, tRID = None):
-        self.role = role
-        self.content = content
-        self.reasoning = reasoning
-        self.toolCalls = toolCalls #that will be a list all the time. Thats for role "assistant"
-        self.toolResults = toolResults #i assume its a list too. Thats for role "tool"
-        self.toolCallId = tRID #tool call result id
-    
-    def composeSelf(self,want_reasoning = True):
-        result = {}
-        if self.content == None and self.reasoning == None and self.toolCalls == None and self.toolResults == None:
-            return
-
-        result.update({
-            "role": self.role
-        })
-
-        if self.content != None:
-            result.update(
-                {
-                    "content": self.content
-                }
-            )
-
-        if self.reasoning != None or self.reasoning == '' and want_reasoning == True:
-            result.update(
-                {
-                    "reasoning_content": self.reasoning
-                }
-            )
-
-        if self.toolCalls != None:
-            toolCallsData = []
-            for i in self.toolCalls:
-                toolCallsData.append(i.composeSelf())
-            result.update(
-                {
-                    "tool_calls": toolCallsData
-                }
-            )
-
-        if self.toolResults != None:
-            result.update(
-                {
-                    "tool_call_id": self.toolCallId,
-                    "content": json.dumps(self.toolResults)
-                }
-            )
- 
-        return result
-
-class modelTextContext:
-    def __init__(self):
-        self.messages = []
-        return
-
-    def add_message(self,message):
-        self.messages.append(message)
-
-    def composeSelf(self,want_reasoning = True):
-        messages = []
-        for i in self.messages:
-            messages.append(i.composeSelf(want_reasoning))
-        return messages
+import agent_messages
 
 class modelRequest:
     def __init__(self,context,model):
@@ -152,9 +86,12 @@ class modelAnswer():
 
 
             if content != None:
+                self.last_item = content
+                if(self.prev == "reasoning"):
+                    self.prev = "answer"
+                    self.last_item = "\n\n"+content
                 self.content+=content
                 self.currently = "answer"
-                self.last_item = content
 
             if reasoning != None:
                 self.reasoning+=reasoning
@@ -178,9 +115,10 @@ class modelAnswer():
 
         #tell the user its now a tool call
         if(self.prev != "tool"):
-            self.last_item = "tool calling"
+            self.last_item = "\n\ntool calling\n"
             self.currently = "tool"
             self.toolChunks = []
+            self.prev = "tool"
         else:
             self.last_item = "."
 
@@ -196,7 +134,7 @@ class modelAnswer():
         return self.stopped
 
     def getMessage(self):
-        return modelMessage("assistant",self.content,self.reasoning,self.toolCalls)
+        return agent_messages.modelMessage("assistant",self.content,self.reasoning,self.toolCalls)
 
 
 class cliPrinter:
@@ -207,11 +145,12 @@ class cliPrinter:
             and os.environ.get("TERM") != "dumb"
         )
 
-        self.thinkColor = "\033[90m" #kinda gray
-        self.answerColor = "\033[36m" #cyan
+        self.thinkColor = "\033[90;3m" #kinda gray
+        self.answerColor = "\033[38;5;33m" #blueish on gray background
         self.userColor = "\033[32m" #green
-        self.systemColor = "\033[33m" #yellow
-        self.toolColor = "\033[91m" #bright red
+        self.systemColor = "\033[38;5;228;48;5;237m" #yellow on gray background
+        self.toolColor = "\033[38;5;196;48;5;237m" #bright red on blue background
+        self.questionColor = "\033[38;5;46;48;5;237m" #bright green on on gray background
 
         self.resetColor = "\033[0m" #reset to as it was
         
@@ -226,6 +165,7 @@ class cliPrinter:
                 color = self.answerColor
             case "tool":
                 color = self.toolColor
+                #do we want to limit max chars?
             case _:
                 return
 
@@ -233,29 +173,32 @@ class cliPrinter:
 
     def printMessage(self,message):
         color = ""
-        content = ""
         match message.role:
             case "tool":
                 color = self.toolColor
             case "system":
                 color = self.systemColor
         print("\n")
-        self.printColorized(color,message.content)
+        content = message.content.strip("\r\n")
+        self.printColorized(color,"\n"+content)
         return
 
     def printColorized(self,color,content):
         if self.use_color == True:
-            print(f"{color}{content}{self.resetColor}", end = "", flush = True)
+            print(f"{color}{str(content)}{self.resetColor}", end = "", flush = True)
         else:
             print(f"{content}", end = "", flush = True)
         return
 
-    def doInput(self,prompt):
+    def doInput(self,prompt, question=False):
         user_prompt = ""
         if self.use_color == False:
             user_prompt = prompt
         else:
-            user_prompt = f"{self.userColor}{prompt}"
+            if question == False:
+                user_prompt = f"{self.userColor}{prompt}"
+            else:
+                user_prompt = f"{self.questionColor}{prompt.center(len(prompt)+5)}{self.resetColor}{self.userColor}"
 
         try:
             return input(user_prompt)
@@ -264,13 +207,17 @@ class cliPrinter:
                 sys.stdout.write(self.resetColor)
             sys.stdout.flush()
 
-    def printEndMessage(self):
-        print("\n\n")
+    def printEndMessage(self,text = ""):
+        if(text==""):
+            print("\n\n")
+        else:
+            print("\n")
+            self.printSysMessage(text)
 
     def printSysMessage(self, message):
         cur_message = message
         if self.use_color == True:
-            cur_message = f"{self.systemColor}{message}"
+            cur_message = f"{self.systemColor}{str(message).center(len(message)+5)}{self.resetColor}"
         print(cur_message)
         print("\n")
 
@@ -322,8 +269,8 @@ def call_model(context, printer):
 
 
 
-session_context = modelTextContext()
-systemMessage = modelMessage("system",agent_definitions.SYS_MESSAGE)
+session_context = agent_messages.modelTextContext()
+systemMessage = agent_messages.modelMessage("system",agent_definitions.SYS_MESSAGE)
 session_context.add_message(systemMessage)
 
 screen_printer = cliPrinter()
@@ -354,8 +301,8 @@ while(1):
 
         case "/clear":
             toolRan = False
-            session_context = modelTextContext()
-            systemMessage = modelMessage("system",agent_definitions.SYS_MESSAGE)
+            session_context = agent_messages.modelTextContext()
+            systemMessage = agent_messages.modelMessage("system",agent_definitions.SYS_MESSAGE)
             session_context.add_message(systemMessage)
             screen_printer.resetScreen()
             screen_printer.printSysMessage("Session reset")
@@ -363,7 +310,7 @@ while(1):
         case _:
             toolRan = False
             if(user_input != ""):
-                userMessage = modelMessage("user",user_input)
+                userMessage = agent_messages.modelMessage("user",user_input)
                 session_context.add_message(userMessage)
             screen_printer.printEndMessage()
 
@@ -393,20 +340,25 @@ while(1):
                             errorText += "Other than bash tool is used"
                         case _: #idk
                             errorText += "Tool call failed, internal error"
-                    errorMessage = modelMessage("system",errorText)
+                    errorMessage = agent_messages.modelMessage("system",errorText)
                     session_context.add_message("system",errorMessage)
                     screen_printer.printMessage(errorMessage)
                     continue
                 #as user if they wanna run it?
-                user_answer = screen_printer.doInput(f"Command is: {runner.toolCall.command}. Want to run tool? Y/N")
+                user_answer = screen_printer.doInput(f"Command is: {runner.toolCall.command}. Want to run tool? Y/N: ", question=True)
                 match user_answer:
                     case "Y": #lets try at least
                         toolCall = runner.executeTool() #needa think about it
-                        ranMessage = modelMessage("tool",runner.result.stdout,None,None,runner.composeSelf(),i.id)
+                        ran_content = ""
+                        if runner.result.returncode == 0:
+                            ran_content = runner.result.stdout
+                        else:
+                            ran_content = runner.result.stderr
+                        ranMessage = agent_messages.modelMessage("tool",ran_content,None,None,runner.composeSelf(),i.id)
                         session_context.add_message(ranMessage)
                         screen_printer.printMessage(ranMessage)
                     case _:
-                        declinedMessage = modelMessage("system",errorText+"User declined execution")
+                        declinedMessage = agent_messages.modelMessage("system",errorText+"User declined execution")
                         session_context.add_message(declinedMessage)
                         screen_printer.printMessage(declinedMessage)
                 
