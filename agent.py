@@ -245,7 +245,7 @@ def call_model(context, printer):
         req = m_request.makeRequest()
 
         #do actual call
-        response = urllib.request.urlopen(req, timeout=15)
+        response = urllib.request.urlopen(req, timeout=60) #15 was too small. Need to handle it later
         for raw_line in response:
             c_answer.processStreamLine(raw_line)
 
