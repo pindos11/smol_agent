@@ -1,0 +1,41 @@
+{
+    "openai_api": {
+        "model_name": "ur model",
+        "api_key": "ur key",
+        "context": "thats n_ctx. Int or str, does not matter",
+        "api_url": "ur api url (with port)"
+    },
+
+    "model_process": {
+        "compact_percent": "80",
+        "compact_verbatim_last_messages": "5",
+        "thinking_in_context": true
+    },
+
+    "agent": {
+        "tool": "powershell",
+        "system_prompt_override": "",
+        "system_prompt_append": ""
+    },
+
+    "presentation": {
+        "text": {
+            "think_escape": "\u001b[90;3m",
+            "answer_escape": "\u001b[38;5;33m",
+            "user_escape": "\u001b[32m",
+            "system_escape": "\u001b[38;5;228;48;5;237m",
+            "tool_escape": "\u001b[38;5;196;48;5;237m",
+            "question_escape": "\u001b[38;5;46;48;5;237m"
+        },
+
+        "tool_calls": {
+            "limit_tool_output_size": true,
+            "limit_tool_output_lines": 5
+        },
+
+        "service_info_display":{
+            "token_up_down_display": true,
+            "estimated_context": true
+        }
+    }
+}

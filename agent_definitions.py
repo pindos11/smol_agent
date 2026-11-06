@@ -2,10 +2,14 @@ import os
 import sys
 from datetime import date
 
-url = "http://127.0.0.1:9090/v1/chat/completions"
-api_secret = "local"
+import agent_config
 
-TOOL_USEABLE = "powershell" #replace with bash on mac/linux
+config = agent_config.agentConfig()
+
+url = config.get_api_url()
+api_secret = config.get_api_key()
+
+TOOL_USEABLE = config.get_tool_name()
 
 SYS_MESSAGE = f'''
 You are a tiny but powerful agent. 

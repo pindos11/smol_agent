@@ -115,12 +115,15 @@ class modelAnswer():
 
         #tell the user its now a tool call
         if(self.prev != "tool"):
-            self.last_item = "\n\ntool calling\n"
+            self.last_item = "\n\ntool calling"
             self.currently = "tool"
             self.toolChunks = []
             self.prev = "tool"
         else:
+            self.currently = "tool"
             self.last_item = "."
+            if len(self.toolChunks)%4 == 0:
+                self.last_item = "\r\033[2Ktool calling"
 
         #lets try to get someting out of the call
         self.toolChunks.append(tool_call) 
