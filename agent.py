@@ -11,6 +11,8 @@ import agent_definitions
 import agent_tools
 import agent_tools_runner
 import agent_messages
+import agent_printer
+import agent_config
 
 class modelRequest:
     def __init__(self,context,model):
@@ -140,99 +142,6 @@ class modelAnswer():
         return agent_messages.modelMessage("assistant",self.content,self.reasoning,self.toolCalls)
 
 
-class cliPrinter:
-    def __init__(self):
-        self.use_color = (
-            sys.stdout.isatty()
-            and "NO_COLOR" not in os.environ
-            and os.environ.get("TERM") != "dumb"
-        )
-
-        self.thinkColor = "\033[90;3m" #kinda gray
-        self.answerColor = "\033[38;5;33m" #blueish on gray background
-        self.userColor = "\033[32m" #green
-        self.systemColor = "\033[38;5;228;48;5;237m" #yellow on gray background
-        self.toolColor = "\033[38;5;196;48;5;237m" #bright red on blue background
-        self.questionColor = "\033[38;5;46;48;5;237m" #bright green on on gray background
-
-        self.resetColor = "\033[0m" #reset to as it was
-        
-    
-    def printChunk(self,content,type):
-        color = ""
-        result = content
-        match type:
-            case "reasoning":
-                color = self.thinkColor
-            case "answer":
-                color = self.answerColor
-            case "tool":
-                color = self.toolColor
-                #do we want to limit max chars?
-            case _:
-                return
-
-        self.printColorized(color,result)
-
-    def printMessage(self,message):
-        color = ""
-        match message.role:
-            case "tool":
-                color = self.toolColor
-            case "system":
-                color = self.systemColor
-        print("\n")
-        content = message.content.strip("\r\n")
-        self.printColorized(color,"\n"+content)
-        return
-
-    def printColorized(self,color,content):
-        if self.use_color == True:
-            print(f"{color}{str(content)}{self.resetColor}", end = "", flush = True)
-        else:
-            print(f"{content}", end = "", flush = True)
-        return
-
-    def doInput(self,prompt, question=False):
-        user_prompt = ""
-        if self.use_color == False:
-            user_prompt = prompt
-        else:
-            if question == False:
-                user_prompt = f"{self.userColor}{prompt}"
-            else:
-                user_prompt = f"{self.questionColor}{prompt.center(len(prompt)+5)}{self.resetColor}{self.userColor}"
-
-        try:
-            return input(user_prompt)
-        finally:
-            if self.use_color == True:
-                sys.stdout.write(self.resetColor)
-            sys.stdout.flush()
-
-    def printEndMessage(self,text = ""):
-        if(text==""):
-            print("\n\n")
-        else:
-            print("\n")
-            self.printSysMessage(text)
-
-    def printSysMessage(self, message):
-        cur_message = message
-        if self.use_color == True:
-            cur_message = f"{self.systemColor}{str(message).center(len(message)+5)}{self.resetColor}"
-        print(cur_message)
-        print("\n")
-
-    def resetScreen(self):
-        if sys.stdout.isatty():
-            print("\033[2J\033[H", flush=True) #seems to be easier
-        #if sys.platform == "win32":
-        #    os.system("cls")
-        #else:
-        #    os.system("clear")
-
-
 ##################### execution here
 
 ### lets define model call function that will just take context and do all the job
@@ -255,6 +164,8 @@ def call_model(context, printer):
             if c_answer.isDone():
                 break
 
+            #who knows, maybe its subject for animated printing?
+            
             printer.printChunk(c_answer.last_item,c_answer.currently)
         
         #done with listening to answer. Lets return final model's message
@@ -271,12 +182,13 @@ def call_model(context, printer):
     
 
 
+config = agent_config.agentConfig()
 
 session_context = agent_messages.modelTextContext()
 systemMessage = agent_messages.modelMessage("system",agent_definitions.SYS_MESSAGE)
 session_context.add_message(systemMessage)
 
-screen_printer = cliPrinter()
+screen_printer = agent_printer.cliPrinter(config)
 
 toolRan = False
 

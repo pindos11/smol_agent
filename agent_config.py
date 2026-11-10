@@ -27,3 +27,6 @@ class agentConfig:
 
     def get_text_colors(self):
         return self.display.get("text",{})
+
+    def get_zen_params(self):
+        return self.display.get("messages",{})
