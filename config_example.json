@@ -36,6 +36,20 @@
         "service_info_display":{
             "token_up_down_display": true,
             "estimated_context": true
+        },
+
+        "messages":{
+            "zen_mode": true,
+            "zen_think_texts": [
+                "Thinking",
+                "Reasoning",
+                "Getting ready to answer"
+            ],
+            "zen_tool_call_texts": [
+                "Tool calling",
+                "Running command",
+                "Literally doing something"
+            ]
         }
     }
 }
