@@ -152,6 +152,8 @@ def call_model(context, printer):
     response = None
 
     try:
+        #ui kek
+        printer.pick_random_texts()
         #make http request
         m_request = modelRequest(context, agent_definitions.MODEL)
         req = m_request.makeRequest()
@@ -165,8 +167,9 @@ def call_model(context, printer):
                 break
 
             #who knows, maybe its subject for animated printing?
+            #we may want to replace reasoning tokens with "Thinking" animation
+            printer.printAnimatedText(c_answer.currently,c_answer.last_item)
             
-            printer.printChunk(c_answer.last_item,c_answer.currently)
         
         #done with listening to answer. Lets return final model's message
 

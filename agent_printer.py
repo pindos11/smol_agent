@@ -1,6 +1,8 @@
 import sys
 import os
 
+import random
+
 class cliPrinter:
     def __init__(self,agent_config = None):
         self.use_color = (
@@ -27,6 +29,7 @@ class cliPrinter:
 
         #animated text enjoyment
         self.animText = ""
+        self.type = ""
         self.animStyle = self.systemColor
         self.animStep = 0
 
@@ -34,6 +37,12 @@ class cliPrinter:
         self.zen_mode = zen_params.get("zen_mode", False)
         self.zen_think_texts = zen_params.get("zen_think_texts",["Thinking"])
         self.zen_tool_call_texts = zen_params.get("zen_tool_call_texts",["Tool calling"])
+
+        #texts for dilly-dallying
+        self.thinkText = ""
+        self.toolText = ""
+
+
     
     def printChunk(self,content,type):
         color = ""
@@ -109,5 +118,43 @@ class cliPrinter:
         #else:
         #    os.system("clear")
     
-    def printAnimatedText(self,text):
-        return
+    def pick_random_texts(self):
+        self.thinkText = random.choice(self.zen_think_texts)
+        self.toolText = random.choice(self.zen_tool_call_texts)
+
+    def printAnimatedText(self,type,text=""): #that ends up being a proxy to zen mode
+        #for now that, but idk. Would need to \r line maybe. Maybe redundant
+        result = ""
+        do_Dots = False
+        #i need to build like next item with animation
+        match type:
+            case "tool":
+                if self.zen_mode == True:
+                    if self.type != type:
+                        self.type = type
+                        result = "\n"
+                    result += f"\r\033[2K{self.toolText}"
+                    do_Dots = True
+                else:
+                    result = text
+            case "reasoning":
+                if self.zen_mode == True:
+                    if self.type != type:
+                        self.type = type
+                        result = "\n"
+                    result += f"\r\033[2K{self.thinkText}"
+                    do_Dots = True
+                else:
+                    result = text
+            case _:
+                result = text
+
+        if do_Dots == True:
+            result += "."*self.animStep
+            self.animStep += 1
+
+            if self.animStep > 4:
+                self.animStep = 0
+
+        #lets now print chunk
+        self.printChunk(result,type)
