@@ -1,0 +1,258 @@
+{
+  "default": {
+    "description": "Plain short answer, reasoning then content, no tools.",
+    "keywords": [
+      "hello",
+      "hi",
+      "hey"
+    ],
+    "reasoning": [
+      "The user said something simple.",
+      " I will reply briefly."
+    ],
+    "content": [
+      "Hello! This is a benign mock reply."
+    ],
+    "finish_reason": "stop"
+  },
+  "single_chunk_content": {
+    "description": "Reasoning streamed token-by-token, then ALL content in ONE content delta.",
+    "keywords": [
+      "single chunk",
+      "singlechunk"
+    ],
+    "reasoning": [
+      "Let me think.",
+      " Then answer at once."
+    ],
+    "content": [
+      "This whole answer arrived in a single content chunk."
+    ],
+    "finish_reason": "stop"
+  },
+  "token_streaming": {
+    "description": "Content streamed many small tokens (normal TTO feel).",
+    "keywords": [
+      "stream",
+      "token"
+    ],
+    "reasoning": [
+      "Streaming word by word now."
+    ],
+    "content": [
+      "this ",
+      "is ",
+      "a ",
+      "streamed ",
+      "answer",
+      "."
+    ],
+    "finish_reason": "stop"
+  },
+  "mixed_delta": {
+    "description": "One delta coalesces reasoning, visible text, and two tool-call updates.",
+    "keywords": [
+      "mixed delta",
+      "mixed chunk",
+      "coalesced"
+    ],
+    "chunks": [
+      {
+        "reasoning_content": "I can plan and answer while beginning tool calls.",
+        "content": "I am starting both commands.",
+        "tool_calls": [
+          {
+            "index": 0,
+            "id": "call_mixed_0",
+            "type": "function",
+            "function": {
+              "name": "powershell",
+              "arguments": "{\"command\":\"echo "
+            }
+          },
+          {
+            "index": 1,
+            "id": "call_mixed_1",
+            "type": "function",
+            "function": {
+              "name": "powershell",
+              "arguments": "{\"command\":\"echo two\"}"
+            }
+          }
+        ]
+      },
+      {
+        "content": " Commands are ready.",
+        "tool_calls": [
+          {
+            "index": 0,
+            "function": {
+              "arguments": "one\"}"
+            }
+          }
+        ]
+      }
+    ],
+    "finish_reason": "tool_calls"
+  },
+  "many_tools": {
+    "description": "Emit many tool calls at once to stress the tool loop.",
+    "keywords": [
+      "many tools",
+      "multiple tools",
+      "batch"
+    ],
+    "reasoning": [
+      "I will call several tools."
+    ],
+    "content": [
+      "Running a batch of commands."
+    ],
+    "tool_calls": [
+      {
+        "index": 0,
+        "id": "call_1",
+        "function": {
+          "name": "powershell",
+          "arguments": {
+            "command": "echo one"
+          }
+        }
+      },
+      {
+        "index": 1,
+        "id": "call_2",
+        "function": {
+          "name": "powershell",
+          "arguments": {
+            "command": "echo two"
+          }
+        }
+      },
+      {
+        "index": 2,
+        "id": "call_3",
+        "function": {
+          "name": "powershell",
+          "arguments": {
+            "command": "echo three"
+          }
+        }
+      },
+      {
+        "index": 3,
+        "id": "call_4",
+        "function": {
+          "name": "powershell",
+          "arguments": {
+            "command": "echo four"
+          }
+        }
+      }
+    ],
+    "chunk_tool_args": true,
+    "finish_reason": "tool_calls"
+  },
+  "incremental_tool_args": {
+    "description": "A single tool call whose arguments arrive across many deltas.",
+    "keywords": [
+      "incremental",
+      "chunked args",
+      "partial args"
+    ],
+    "reasoning": [
+      "Building the command slowly."
+    ],
+    "content": [
+      "Composing a command piece by piece."
+    ],
+    "tool_calls": [
+      {
+        "index": 0,
+        "id": "call_abc",
+        "function": {
+          "name": "powershell",
+          "arguments": {
+            "command": "echo hello from a long command split across many deltas"
+          }
+        }
+      }
+    ],
+    "chunk_tool_args": true,
+    "finish_reason": "tool_calls"
+  },
+  "multi_turn_tool": {
+    "description": "One tool call, then a follow-up text answer after the tool result.",
+    "keywords": [
+      "follow up",
+      "multi turn",
+      "followup"
+    ],
+    "reasoning": [
+      "Run the tool first."
+    ],
+    "content": [],
+    "tool_calls": [
+      {
+        "index": 0,
+        "id": "call_turn1",
+        "function": {
+          "name": "powershell",
+          "arguments": {
+            "command": "echo tool-result"
+          }
+        }
+      }
+    ],
+    "chunk_tool_args": false,
+    "finish_reason": "tool_calls"
+  },
+  "malformed_tool": {
+    "description": "Tool call chunk missing the id on first occurrence (tests parser skip).",
+    "keywords": [
+      "malformed",
+      "bad id",
+      "no id"
+    ],
+    "reasoning": [
+      "Sending a weird tool chunk."
+    ],
+    "content": [
+      "Here is a malformed tool call."
+    ],
+    "tool_calls": [
+      {
+        "index": 0,
+        "function": {
+          "name": "powershell",
+          "arguments": {
+            "command": "echo no-id-here"
+          }
+        }
+      },
+      {
+        "index": 1,
+        "id": "call_good",
+        "function": {
+          "name": "powershell",
+          "arguments": {
+            "command": "echo good"
+          }
+        }
+      }
+    ],
+    "chunk_tool_args": false,
+    "finish_reason": "tool_calls"
+  },
+  "no_reasoning": {
+    "description": "Content only, no reasoning_content at all.",
+    "keywords": [
+      "no reasoning",
+      "reasoningless"
+    ],
+    "content": [
+      "Answer with no thinking block."
+    ],
+    "finish_reason": "stop"
+  }
+}
