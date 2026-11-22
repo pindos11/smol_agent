@@ -1,28 +1,28 @@
 # smol agent
 
-Openai compatible agent harness with single tool: bash.
+OpenAI-compatible agent harness. One tool: run a shell command, get output and exit code.
 
 ## Set up
 
-### Url
-Enter openai compatible endpoint in agent_definitions.py as constant `url`
+`config.json`: api_key, api_url, model live there now - not hardcoded in agent_definitions.py. use `config_example.json` as a template and make own copy named `config.json`.
 
-### API key
-Same include, constant `api_secret`
+## State
 
-### Model
-Same include, constant `MODEL`
+### Tool
+Actually runs commands now. Windows -> powershell, posix -> shell. 5s timeout, hard char cap, kills the process tree on timeout.
 
-## Whats not done yet
-
-### Secret handling
-Sure it will end up being not hardcoded
-
-### Tool actual use
-Right now it can receive tool call, but does not run it lol
+### Secrets
+Moved out of the code into config.json. Still not encrypted.
 
 ### Display
-I think a bit richer display is going to be beneficial too
+Colored printer. Zen mode, service info (tokens, context estimate). Tool output line-limited for the screen.
+
+### Context
+Compaction not yet done.
+
+## Manual testing
+
+manual_testing has a mock server and scenarios for running the loop without a real model. There is more in its README.
 
 ## Run tests
 
