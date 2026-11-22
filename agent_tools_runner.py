@@ -45,7 +45,7 @@ class agentToolRunner:
             text = True,
             encoding = "utf-8",
             errors="replace",
-            timeout = 5
+            timeout = 5 #i think its reasonable
         )
 
         return (self.result.returncode,self.result.stdout,self.result.stderr)
