@@ -73,8 +73,8 @@ def call_model(context, printer):
             #we may want to replace reasoning tokens with "Thinking" animation
 
             #we have to understand that in fact, model api can emit many things. Lets print all one by one
-            if c_answer.currently != "nothing":
-                print("\n\n---Chunk---")
+            #if c_answer.currently != "nothing":
+            #    print("\n\n---Chunk---")
 
             #reasoning
             if(c_answer.last_reasoning != ""):
