@@ -1,5 +1,4 @@
-
-import agent_config
+﻿import agent_config
 import agent_printer
 import agent_api_request
 import agent_messages
@@ -143,24 +142,29 @@ class agentLoop:
                 self.printer.printMessage(errorMessage)
                 continue
             #ask user if they wanna run it?
-            user_answer = self.printer.doInput(f"\nCommand is: {runner.toolCall.command}. Want to run tool? Y/N: ", question=True)
+            user_answer = self.printer.doInput(f"\nCommand is: {runner.toolCall.command}. Want to run tool? Y/N: \n", question=True)
             match user_answer:
                 case "Y": #lets try at least
-                    toolCall = runner.executeTool() #needa think about it
-                    ran_content = ""
-                    if runner.result.returncode == 0:
-                        ran_content = runner.result.stdout
-                    else:
-                        ran_content = runner.result.stderr
+                    try:
+                        runner.executeTool()
+                        ran_content = ""
+                        if runner.result.returncode == 0:
+                            ran_content = runner.result.stdout
+                        else:
+                            ran_content = runner.result.stderr
 
-                    self.printer.printEndMessage()
+                        self.printer.printEndMessage("Tool call result:")
 
-                    ranMessage = agent_messages.modelMessage("tool",ran_content,None,None,runner.composeSelf(),i.id)
-                    self.session_context.add_message(ranMessage)
-                    self.printer.printMessage(ranMessage)
+                        ranMessage = agent_messages.modelMessage("tool",ran_content,None,None,runner.composeSelf(),i.id)
+                        self.session_context.add_message(ranMessage)
+                        self.printer.printMessage(ranMessage)
+                    except Exception as e:
+                        #fail safe: a tool error must not kill the whole agent loop
+                        errMsg = agent_messages.modelMessage("system", f"Tool {i.index} failed to run: {e}")
+                        self.session_context.add_message(errMsg)
+                        self.printer.printMessage(errMsg)
                 case _:
                     self.printer.printEndMessage()
                     declinedMessage = agent_messages.modelMessage("system",errorText+"User declined execution")
                     self.session_context.add_message(declinedMessage)
                     self.printer.printMessage(declinedMessage)
-

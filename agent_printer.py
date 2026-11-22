@@ -11,12 +11,16 @@ class cliPrinter:
             and os.environ.get("TERM") != "dumb"
         )
 
+        self.tool_size_limit = False
+        self.tool_line_limit = 100
 
         colors = {}
         zen_params = {}
         if agent_config != None:
             colors = agent_config.get_text_colors()
             zen_params = agent_config.get_zen_params()
+            self.tool_size_limit, self.tool_line_limit = agent_config.get_tool_output_limits()
+
 
         self.thinkColor = colors.get("think_escape","")
         self.answerColor = colors.get("answer_escape","")
@@ -67,9 +71,16 @@ class cliPrinter:
                 color = self.toolColor
             case "system":
                 color = self.systemColor
-        print("\n")
+        #print("\n")
         content = message.content.strip("\r\n")
-        self.printColorized(color,"\n"+content)
+        if message.role == "tool" and self.tool_size_limit and self.tool_line_limit > 0:
+            lines = content.splitlines()
+            omitted = len(lines) - self.tool_line_limit
+
+            if omitted > 0:
+                content = "\n".join(lines[:self.tool_line_limit])
+                content += f"\n...[truncated {omitted} lines]"
+        self.printColorized(color,content)
         return
 
     def printColorized(self,color,content):
