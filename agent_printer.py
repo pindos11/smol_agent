@@ -146,6 +146,11 @@ class cliPrinter:
                     do_Dots = True
                 else:
                     result = text
+            case "answer":
+                if self.type != type:
+                    self.type = type
+                    result = "\n"
+                result += text
             case _:
                 result = text
 

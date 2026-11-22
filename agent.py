@@ -8,11 +8,11 @@ from datetime import date
 
 ###custom imports (file unreadable as single file, so i did split)
 import agent_definitions
-import agent_tools
 import agent_tools_runner
 import agent_messages
 import agent_printer
 import agent_config
+import agent_answer
 
 class modelRequest:
     def __init__(self,context,model):
@@ -44,103 +44,6 @@ class modelRequest:
 
         return result
 
-class modelAnswer():
-    def __init__(self):
-        self.content = ""
-        self.reasoning = ""
-        self.stopped = False
-        self.debug_result = []
-        self.last_item = ""
-        self.currently = "reasoning"
-        self.prev = "reasoning"
-        self.toolCalls = []
-
-
-
-    def processStreamLine(self,data):
-        line = data.decode("utf-8").strip()
-        if line[:6] != "data: ":
-            #what was called before???
-            if(self.currently != "nothing"):
-                self.prev = self.currently
-            self.currently = "nothing"
-            return
-
-        ###debug result
-        self.debug_result.append(line)
-        ###debug end
-        
-        update = line[6:]
-        if update == '[DONE]':
-            self.stopped = True
-            return
-
-        #print(update)
-
-        update_j = json.loads(update)
-
-        for item in update_j.get("choices",[]):
-            delta = item.get("delta",{})
-            reasoning = delta.get("reasoning_content")
-            content = delta.get("content")
-            tool_calls = delta.get("tool_calls")
-            finish_reason = item.get("finish_reason")
-
-
-            if content != None:
-                self.last_item = content
-                if(self.prev == "reasoning"):
-                    self.prev = "answer"
-                    self.last_item = "\n\n"+content
-                self.content+=content
-                self.currently = "answer"
-
-            if reasoning != None:
-                self.reasoning+=reasoning
-                self.currently = "reasoning"
-                self.last_item = reasoning
-
-            if tool_calls != None:
-                self.process_tool(tool_calls)
-
-            if finish_reason == "tool_calls":
-                self.process_tool(None,True)
-                self.stopped = True
-                self.calledTool = True
-
-    def process_tool(self,tool_call = None, end = False):
-        #tool call ended, so we need to go further
-        if end == True:
-            self.finalize_tool()
-            return
-
-
-        #tell the user its now a tool call
-        if(self.prev != "tool"):
-            self.last_item = "\n\ntool calling"
-            self.currently = "tool"
-            self.toolChunks = []
-            self.prev = "tool"
-        else:
-            self.currently = "tool"
-            self.last_item = "."
-            if len(self.toolChunks)%4 == 0:
-                self.last_item = "\r\033[2Ktool calling"
-
-        #lets try to get someting out of the call
-        self.toolChunks.append(tool_call) 
-
-    def finalize_tool(self):
-        processor = agent_tools.agentToolsChunkParser()
-
-        self.toolCalls = processor.processChunks(self.toolChunks)
-    
-    def isDone(self):
-        return self.stopped
-
-    def getMessage(self):
-        return agent_messages.modelMessage("assistant",self.content,self.reasoning,self.toolCalls)
-
 
 ##################### execution here
 
@@ -148,7 +51,7 @@ class modelAnswer():
 
 def call_model(context, printer):
     # define object to process model's answer
-    c_answer = modelAnswer()
+    c_answer = agent_answer.modelAnswer()
     response = None
 
     try:
@@ -168,11 +71,27 @@ def call_model(context, printer):
 
             #who knows, maybe its subject for animated printing?
             #we may want to replace reasoning tokens with "Thinking" animation
-            printer.printAnimatedText(c_answer.currently,c_answer.last_item)
+
+            #we have to understand that in fact, model api can emit many things. Lets print all one by one
+            if c_answer.currently != "nothing":
+                print("\n\n---Chunk---")
+
+            #reasoning
+            if(c_answer.last_reasoning != ""):
+                printer.printAnimatedText("reasoning",c_answer.last_reasoning)
+
+            #now content
+            if(c_answer.last_content != ""):
+                printer.printAnimatedText("answer",c_answer.last_content)
+
+            #now maybe tool call too
+            if(c_answer.last_tool != ""):
+                printer.printAnimatedText("tool",c_answer.last_tool)
+
+            #printer.printAnimatedText(c_answer.currently,c_answer.last_item)
             
         
         #done with listening to answer. Lets return final model's message
-
         return c_answer
     except KeyboardInterrupt:
         printer.printEndMessage()

@@ -41,7 +41,9 @@ class agentToolsChunkParser:
 
     def processChunks(self,chunks):
         #we have several important items per chunk
-        self.toolCalls = []
+        # keyed by index so gaps (e.g. a skipped chunk with no id) don't break
+        # assignment-by-index, which used to raise IndexError on non-sequential calls.
+        tools_by_index = {}
 
         for i in chunks:
             #it is a list, so there MAY be several things
@@ -49,16 +51,15 @@ class agentToolsChunkParser:
                 index = j.get("index")
                 if index == None:
                     continue
-                curTool = None
-                if len(self.toolCalls)<index+1: #new tool call
+                index = int(index)
+                if index not in tools_by_index:
                     #if its new tool, there shoulda be id
                     id = j.get("id")
                     if id == None:
-                        continue #bruh
-                    curTool = agentToolCall(index,id)
-                    self.toolCalls.append(curTool)
-                else:
-                    curTool = self.toolCalls[int(index)]
+                        continue #can't create a tool without an id
+                    tools_by_index[index] = agentToolCall(index,id)
+
+                curTool = tools_by_index[index]
 
                 #cool stuff, now lets fill current tool call with chunk's data
                 func = j.get("function",{})
@@ -69,7 +70,9 @@ class agentToolsChunkParser:
                 argument = func.get("arguments")
                 if argument != None:
                     curTool.partArgs += argument
-                self.toolCalls[int(index)] = curTool
+
+        #emit in index order so tool index in context/reporting stays stable
+        self.toolCalls = [tools_by_index[k] for k in sorted(tools_by_index)]
 
         #cool, done with chunks
 
